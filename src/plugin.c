@@ -38,12 +38,16 @@ void eq_set(int on, char data[10], int preamp);
 void wa_main(int argc, char **argv);
 void run_emulator_cycles(unsigned int target_cycles);
 
+void updateCoinKHz();
+
 bool newrom = false;
 
 int bitrate = 0;
 int srate = 0;
 int stereo = 0;
 int synced = 0;
+
+int cash_money = 0;
 
 In_Module mod =		// the output module
 {
@@ -138,6 +142,7 @@ uint8_t *rom, *chrrom,                // Points to the start of PRG/CHR ROM
     last_world,
     last_level;
 
+
 uint16_t scany,          // Scanline Y
     T, V,                // "Loopy" PPU registers
     sum,                 // Sum used for ADC/SBC
@@ -224,6 +229,7 @@ int play(const char* fn) {
   OutputDebugString(str);
 
   mod.SetInfo(bitrate, srate, stereo, synced);
+  
   //mod.SAVSAInit(maxlatency, 44100);
   // where we're going, we don't need maxlatency
   // you cant see into the future in an NES emulator anyway
@@ -479,15 +485,20 @@ uint8_t mem(uint8_t lo, uint8_t hi, uint8_t val, uint8_t write) {
     // $4016 Joypad 1
     for (tmp = 0, hi = 8; hi--;)
     // losely based on niftsky's input mapping for his speedruns
+    /* however in my branch I'd prefer something SANER
+    Eris reworked these to use Win32 VK codes instead
+    And when you're done reading this sentence, M$ has already broken the documentation links and shuffled everything around 20 times
+    */
+
       tmp = tmp * 2 + key_state[(uint8_t[]){
-                          0x60,      // A
-                          0x27,      // B
-                          'G',    // Select
-                          'J', // Start
-                          'W',     // Dpad Up
-                          'S',   // Dpad Down
-                          'A',   // Dpad Left
-                          'D',  // Dpad Right
+                          'X',      // A
+                          'Z',      // B
+                          0xDC,    // Select
+                          0x0D, // Start
+                          0x26,     // Dpad Up
+                          0x28,   // Dpad Down
+                          0x25,   // Dpad Left
+                          0x27,  // Dpad Right
                       }[hi]];
     if (lo == 22) {
       if (write) {
@@ -1092,6 +1103,11 @@ void run_emulator_cycles(unsigned int target_cycles)
   } // while(consumed < target_cycles)
 } // run_emulator_cycles
 
+void updateCoinKHz()
+{
+  mod.SetInfo(cash_money, srate, stereo, synced);
+}
+
 void stop() {
   done = 1;
   WaitForSingleObject(hThread, 500);
@@ -1139,6 +1155,8 @@ void setpan(int pan)
 {
   mod.outMod->SetPan(pan);
 }
+
+
 
 void getfileinfo(const char* filename, char* title, int* length_in_ms)
 {
