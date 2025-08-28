@@ -93,7 +93,6 @@ void SuperMarioBrosSpecificHacks(uint16_t addr, uint8_t val, uint8_t write) {
     // This is a hex value instead of BCD fuckery
 
     if (addr == 0x075E && write) { // detect writes on $075E
-        uint8_t cash_money = 0;
       sprintf(str, "COIN at %04X val=%02X", addr, val); // tells me what address and what value is there
         char val_str[4];
         sprintf(val_str, "%02X", val);

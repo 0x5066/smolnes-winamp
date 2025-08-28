@@ -2,14 +2,14 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
-
+#include "plugin.h"
 #define WIN32_LEAN_AND_MEAN
-#include "../nes_nsfplay/common.h"
+#include "../nes_nsfplay/common.h" // Seems to piss off vscode for some reason, doesn't work without
 #include "MiniFB.h"
 #include "../thirdparty/wacup/in2.h" // wacup input plugin api
 #include "../thirdparty/wacup/wa_ipc.h" // wacup ipc api
 #include "../nes_nsfplay/xtypes.h"
-#include "plugin.h"
+
 
 #define PLUGIN_VERSION "1.0.0"
 char lastfn[MAX_PATH];
@@ -47,7 +47,7 @@ int srate = 0;
 int stereo = 0;
 int synced = 0;
 
-int cash_money = 0;
+uint8_t cash_money;
 
 In_Module mod =		// the output module
 {
@@ -398,7 +398,11 @@ uint8_t mem(uint8_t lo, uint8_t hi, uint8_t val, uint8_t write) {
   // any other game produces unexpected results
   SuperMarioBrosSpecificHacks(addr, val, write);
 
-  mod.SetInfo(bitrate, srate, stereo, dead);
+  // oh well
+
+
+// really hacky
+  mod.SetInfo(cash_money, srate, stereo, dead);
 
   xgm::nes1_NP->Write(addr,val);
   xgm::nes2_NP->Write(addr,val);
@@ -1102,11 +1106,6 @@ void run_emulator_cycles(unsigned int target_cycles)
     consumed += cycles;
   } // while(consumed < target_cycles)
 } // run_emulator_cycles
-
-void updateCoinKHz()
-{
-  mod.SetInfo(cash_money, srate, stereo, synced);
-}
 
 void stop() {
   done = 1;

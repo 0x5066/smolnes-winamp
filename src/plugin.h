@@ -14,6 +14,6 @@ extern bool length_determiner;
 
 extern void SuperMarioBrosSpecificHacks(uint16_t addr, uint8_t val, uint8_t write);
 
-extern int cash_money;
+extern uint8_t cash_money;
 
 #endif
