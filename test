@@ -1,4 +1,0 @@
-#!/bin/bash
-
-winedbg --gdb '/home/dinnerbird/.wine/drive_c/Program Files (x86)/WACUP/wacup.exe' 
-

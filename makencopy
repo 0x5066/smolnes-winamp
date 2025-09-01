@@ -1,6 +1,0 @@
-#!/bin/bash
-
-make clean ; make
-cp in_nes.dll '/home/dinnerbird/.wine/drive_c/Program Files (x86)/WACUP/Plugins'
-
-
