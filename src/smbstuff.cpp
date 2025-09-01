@@ -1,14 +1,5 @@
 #include "plugin.h"
-#include <cstdio>
-#include <debugapi.h>
-#include <cstdlib>
 
-/* 
-A bit of clarification if you're poking around here:
-addr    = CPU address
-val     = what memory value is it?
-write   = "hey, it's a write!"
-*/
 void SuperMarioBrosSpecificHacks(uint16_t addr, uint8_t val, uint8_t write) {
     char str[40];
     if (addr == 0x000E && val == 0x06){
@@ -83,24 +74,4 @@ void SuperMarioBrosSpecificHacks(uint16_t addr, uint8_t val, uint8_t write) {
             }
         }
     }
-    // Both in BCD (of course)
-    // $07ED and $07EE: Mario's coins
-    // $07F3 and $07F4: Luigi's coins
-
-    // BUT we can use $075E to get the onscreen player's coin count
-    // Goes up to $63 and then back to $00
-    // ($0765 is the "off-screen" player's coins)
-    // This is a hex value instead of BCD fuckery
-
-    if (addr == 0x075E && write) { // detect writes on $075E
-      sprintf(str, "COIN at %04X val=%02X", addr, val); // tells me what address and what value is there
-        char val_str[4];
-        sprintf(val_str, "%02X", val);
-        cash_money = strtol(val_str, nullptr, 16);
-        
-
-        OutputDebugString(str);
-        
-    }
-
 }
