@@ -603,12 +603,10 @@ void readfile(const char * pathname, uint8_t * dst) {
 // Reset the entire NES state to power-on values
 void resetNES(void) {
   // Clear CPU/PPU/APU accessible RAM
-  memset(ram, 0, sizeof(ram));          // CPU RAM $0000-$07FF (+ mirrors)
-  memset(vram, 0, sizeof(vram));        // PPU nametables (depends on mapper)
-  memset(palette_ram, 0, sizeof(palette_ram)); // PPU palettes
-  memset(prgram, 0, sizeof(prgram));    // PRG RAM (battery-backed if present)
-  memset(oam, 0, sizeof(oam));          // Sprite OAM (Object Attribute Memory)
-  memset(chrram, 0, sizeof(chrram));    // CHR RAM (if no CHR ROM)
+  memset(ram, 0, sizeof(ram)), memset(vram, 0, sizeof(vram)),
+  memset(palette_ram, 0, sizeof(palette_ram)), memset(prgram, 0, sizeof(prgram)),
+  memset(oam, 0, sizeof(oam)), memset(chrram, 0, sizeof(chrram)),
+  memset(smbtmr, 0, sizeof(smbtmr));
 
   // Mapper-specific state reset
   memset(mmc3_chrprg, 0, sizeof(mmc3_chrprg));
@@ -619,6 +617,7 @@ void resetNES(void) {
   mmc1_bits = 0;
   mmc1_data = 0;
   mmc1_ctrl = 0;
+  mirror = 0; prgbits = 14; chrbits = 12;
 
   // Default mirroring / PRG / CHR setup
   mirror  = 0;
@@ -627,18 +626,18 @@ void resetNES(void) {
   chr[0]  = 0;
   chr[1]  = 1;
 
+  xgm::nes1_NP->Reset();
+  xgm::nes2_NP->Reset();
+
   for(int i = 0; i < 2; i++){
     smbtmr[i] = 0;
     smbltmr[i] = 0;
   }
 
-  xgm::nes1_NP->Reset();
-  xgm::nes2_NP->Reset();
-
-  // Reset CPU registers
   A = X = Y = 0;
   P = 0x34;        // Typical power-on status: IRQ disabled, unused bits set
   S = 0xFD;        // Stack pointer
+
   newrom = false;
   // Program counter gets reset vector from $FFFC-$FFFD later
 }
@@ -689,7 +688,7 @@ void run_emulator_cycles(unsigned int target_cycles)
 {
   unsigned int consumed = 0;
   // locals used by many labels / gotos - declare early
-  uint8_t opcodelo5 = 0;
+  uint8_t opcodelo5;
   int cross = 0;
   int tmp_local = 0;
   int result_local = 0;

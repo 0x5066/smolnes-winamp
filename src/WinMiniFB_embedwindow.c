@@ -43,17 +43,12 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         case WM_KEYUP:
         case WM_SYSKEYUP: {
             key_status[wParam] = !(lParam >> 31 & 1);
-
-            if ((wParam & 0xFF) == 27)
-                s_close = 1;
-
             break;
         }
 
-        case WM_CLOSE: {
-            s_close = 1;
-            break;
-        }
+        //case WM_CLOSE: {
+            // where we're going we dont need s_close = 1 and break;
+        //}
     }
 
     return DefWindowProc(hWnd, message, wParam, lParam);
@@ -171,9 +166,6 @@ int mfb_update(void* buffer, int fps_limit) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
-
-    if (s_close == 1)
-        return -1;
 
     if (fps_limit) {
         const DWORD targetFrameTime = 1000 / fps_limit;
