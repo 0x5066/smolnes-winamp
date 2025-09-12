@@ -6,3 +6,4 @@ deobfuscated
 *.dll
 bin/
 build/
+*.code-workspace

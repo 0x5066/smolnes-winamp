@@ -173,9 +173,6 @@ int init()
     xgm::nes2_NP->Write(i,0x00);
   } */
 
-  xgm::nes1_NP->Reset();
-  xgm::nes2_NP->Reset();
-
   /* xgm::nes1_NP->SetClock(xgm::DEFAULT_CLOCK);
   xgm::nes1_NP->SetRate(44100);
   xgm::nes2_NP->SetClock(xgm::DEFAULT_CLOCK);
@@ -216,7 +213,7 @@ int play(const char* fn) {
 
   wapaused = 0;
 
-  maxlatency = mod.outMod->Open(44100,2,16, -1,-1);
+  maxlatency = mod.outMod->Open(44100,1,16,0,0);
 	if(maxlatency < 0) return 1;
 
   char str[40];
@@ -228,12 +225,9 @@ int play(const char* fn) {
   // where we're going, we don't need maxlatency
   // you cant see into the future in an NES emulator anyway
   mod.SAVSAInit(0, 44100);
-  mod.VSASetInfo(44100, 2);
+  mod.VSASetInfo(44100, 1);
   mod.outMod->SetVolume(-666);
   mod.outMod->Flush(0);
-
-  xgm::nes1_NP->Reset();
-  xgm::nes2_NP->Reset();
 
   // create audio thread
   DWORD threadId;
@@ -244,6 +238,9 @@ int play(const char* fn) {
 double apu_clock_rest = 0.0;
 int apu1[2] = {0,0};
 int apu2[2] = {0,0};
+double cycles_accum = 0.0;
+double apu_clock_per_sample = (1789773 / sample_rate); 
+const double cpu_cycles_per_sample = (double)xgm::DEFAULT_CLOCK / (double)256/256.0;
 
 static int Thread(void* arg) {
   char* filename = (char*)arg;
@@ -275,20 +272,20 @@ static int Thread(void* arg) {
   free(argv);
   free(filename); // filename no longer needed after wa_main
 
+  const int sample_rate       = 44100;
+  const int channels          = 1;
+  const int frames_per_buffer = 576;
+  const int frameSize         = channels * (int)sizeof(short);
+
   xgm::INT16 *packet_buf;
-  int packet_size = 576 * 2 * 16 / 8; // �o�b�t�@�T�C�Y2048bytes�Œ�
-  int blank_time = 10; // �ŏ��̐��p�P�b�g�͖����ɂ���(DirectX plugin�΍�)
+  int packet_size = 576 * channels * 16 / 8; // �o�b�t�@�T�C�Y2048bytes�Œ�
+  //int blank_time = 10; // �ŏ��̐��p�P�b�g�͖����ɂ���(DirectX plugin�΍�)
   int wsize; // dsp������̏������݃T�C�Y
-  int sample_size = 2 * 16 / 8;
+  int sample_size = channels * 16 / 8;
   int packet_samples = packet_size / sample_size;
 
   packet_buf = new xgm::INT16[packet_size]; // dsp�̂��߂�2�{�̗̈���m��
   memset(packet_buf,0,packet_size*sizeof(xgm::INT16));
-
-  const int sample_rate       = 44100;
-  const int channels          = 2;
-  const int frames_per_buffer = 576;
-  const int frameSize         = channels * (int)sizeof(short);
 
   double cycles_accum = 0.0;
   double apu_clock_per_sample = (1789773 / sample_rate); 
@@ -301,40 +298,27 @@ static int Thread(void* arg) {
       // fill buffer with emulator audio
       short* s = packet_buf;
       for (int i = 0; i < packet_samples; i++) {
-        apu_clock_rest += apu_clock_per_sample;
-        int apu_clocks = (int)(apu_clock_rest);
-          run_emulator_cycles(14);
-          xgm::nes1_NP->Tick(apu_clock_per_sample);
-          xgm::nes2_NP->TickFrameSequence(apu_clock_per_sample);
-          xgm::nes2_NP->Tick(apu_clock_per_sample);
-          apu_clock_rest += apu_clock_per_sample;
-        if (apu_clocks > 0)
-        {
-          apu_clock_rest -= (double)(apu_clocks);
-        }
-
-        xgm::nes1_NP->Render(apu1);
-        xgm::nes2_NP->Render(apu2);
+        run_emulator_cycles(14);
 
         // scales the audio coming from NSFplay's APU and DMC code
         // also comes with very crude centering because of the DMC creating a DC offset
         // doesnt address the triangle channel going all wonky though
         const int SCALE = 8;
-        int left  = (((apu1[0]/24) + apu2[0] - (xgm::nes2_NP->out[2] * (SCALE) * 5)) * SCALE) - 5800;
+        int left = (((apu1[0]/24) + apu2[0] - (xgm::nes2_NP->out[2] * (SCALE) * 5)) * SCALE) - 5800;
         //int left = ((xgm::nes2_NP->out[0] * (SCALE) * 5)) * SCALE;
-        int right = left;
+        //int right = left;
 
         if (left > 32767) left = 32767;
         if (left < -32768) left = -32768;
-        if (right > 32767) right = 32767;
-        if (right < -32768) right = -32768;
+        //if (right > 32767) right = 32767;
+        //if (right < -32768) right = -32768;
 
         *s++ = (short)left;
-        *s++ = (short)right;
+        //*s++ = (short)right;
       }
 
       if(mod.dsp_isactive())
-        wsize = mod.dsp_dosamples((short *)packet_buf,packet_samples,16,2,sample_rate) * (2*16/8);
+        wsize = mod.dsp_dosamples((short *)packet_buf,packet_samples,16,channels,sample_rate) * (channels*16/8);
       else
         wsize = packet_size;
 
@@ -379,23 +363,33 @@ bool in_game = false;
 uint8_t mem(uint8_t lo, uint8_t hi, uint8_t val, uint8_t write) {
   uint16_t addr = hi << 8 | lo;
 
-  // my first 6502 assembly program :)
-  // (just clears ram)
-  if (newrom) {
-    for (int i = 0x00; i < 0xFFFF; i++) {
-      val = 0x00;
-    }
-    newrom = false;
-  }
-
   // this all only works for super mario bros
   // any other game produces unexpected results
   SuperMarioBrosSpecificHacks(addr, val, write);
 
   mod.SetInfo(bitrate, srate, stereo, dead);
 
-  xgm::nes1_NP->Write(addr,val);
-  xgm::nes2_NP->Write(addr,val);
+  if (write) {
+    xgm::nes1_NP->Write(addr, val);
+    xgm::nes2_NP->Write(addr, val);
+
+    // disable dpcm because its bugged right now
+    if (addr == 0x4015) {
+      uint8_t D = val;
+      D &= ~(1 << 4);
+      xgm::nes2_NP->Write(addr, D);
+    }
+  }
+  // handle reads
+  else {
+    unsigned int tmp = 0; // temporary wide storage
+    xgm::nes1_NP->Read(addr, tmp);
+    val = static_cast<uint8_t>(tmp);
+
+    tmp = 0;
+    xgm::nes2_NP->Read(addr, tmp);
+    val = static_cast<uint8_t>(tmp);
+  }
 
   // disable dpcm because its bugged right now
   if (addr == 0x4015) {
@@ -606,6 +600,49 @@ void readfile(const char * pathname, uint8_t * dst) {
   fread(dst, sizeof(uint8_t), size, file);
 }
 
+// Reset the entire NES state to power-on values
+void resetNES(void) {
+  // Clear CPU/PPU/APU accessible RAM
+  memset(ram, 0, sizeof(ram));          // CPU RAM $0000-$07FF (+ mirrors)
+  memset(vram, 0, sizeof(vram));        // PPU nametables (depends on mapper)
+  memset(palette_ram, 0, sizeof(palette_ram)); // PPU palettes
+  memset(prgram, 0, sizeof(prgram));    // PRG RAM (battery-backed if present)
+  memset(oam, 0, sizeof(oam));          // Sprite OAM (Object Attribute Memory)
+  memset(chrram, 0, sizeof(chrram));    // CHR RAM (if no CHR ROM)
+
+  // Mapper-specific state reset
+  memset(mmc3_chrprg, 0, sizeof(mmc3_chrprg));
+  mmc3_bits  = 0;
+  mmc3_irq   = 0;
+  mmc3_latch = 0;
+
+  mmc1_bits = 0;
+  mmc1_data = 0;
+  mmc1_ctrl = 0;
+
+  // Default mirroring / PRG / CHR setup
+  mirror  = 0;
+  prg[0]  = 0;
+  prg[1]  = 1;
+  chr[0]  = 0;
+  chr[1]  = 1;
+
+  for(int i = 0; i < 2; i++){
+    smbtmr[i] = 0;
+    smbltmr[i] = 0;
+  }
+
+  xgm::nes1_NP->Reset();
+  xgm::nes2_NP->Reset();
+
+  // Reset CPU registers
+  A = X = Y = 0;
+  P = 0x34;        // Typical power-on status: IRQ disabled, unused bits set
+  S = 0xFD;        // Stack pointer
+  newrom = false;
+  // Program counter gets reset vector from $FFFC-$FFFD later
+}
+
 // "wa_main" is a misleading name, but what am i supposed to name it
 // it's just the main() function of smolnes
 // wa_main implies the existence of a "winamp main" (lie)
@@ -614,16 +651,7 @@ void wa_main(int argc, char **argv) {
   // and shit fucking corrupts and or crashes the player
   newrom = true;
   if (newrom) {
-    memset(ram, 0, sizeof(ram)), memset(vram, 0, sizeof(vram)),
-        memset(palette_ram, 0, sizeof(palette_ram)), memset(prgram, 0, sizeof(prgram)),
-        memset(oam, 0, sizeof(oam)), memset(chrram, 0, sizeof(chrram)),
-        memset(smbtmr, 0, sizeof(smbtmr)); mmc3_bits = 0;
-    memset(mmc3_chrprg, 0, sizeof(mmc3_chrprg));
-    mmc3_irq = 0; mmc3_latch = 0; mmc1_bits = 0, mmc1_data = 0, mmc1_ctrl = 0;
-    //memset(rom, 0, sizeof(rom)),memset(chrrom, 0, sizeof(chrrom));
-    mirror = 0; prgbits = 14; chrbits = 12;
-    prg[0] = 0; prg[1] = 1;
-    chr[0] = 0; chr[1] = 1;
+    resetNES();
   }
   readfile(argv[1], rombuf);
   // Start PRG0 after 16-byte header.
@@ -661,10 +689,24 @@ void run_emulator_cycles(unsigned int target_cycles)
 {
   unsigned int consumed = 0;
   // locals used by many labels / gotos - declare early
-  uint8_t opcodelo5;
+  uint8_t opcodelo5 = 0;
   int cross = 0;
   int tmp_local = 0;
   int result_local = 0;
+
+  apu_clock_rest += apu_clock_per_sample;
+  int apu_clocks = (int)(apu_clock_rest);
+  xgm::nes1_NP->Tick(apu_clock_per_sample);
+  xgm::nes2_NP->TickFrameSequence(apu_clock_per_sample);
+  xgm::nes2_NP->Tick(apu_clock_per_sample);
+  apu_clock_rest += apu_clock_per_sample;
+  if (apu_clocks > 0)
+  {
+    apu_clock_rest -= (double)(apu_clocks);
+  }
+
+  xgm::nes1_NP->Render(apu1);
+  xgm::nes2_NP->Render(apu2);
 
   // keep executing instructions until we've consumed the requested cycles
   while (consumed < target_cycles)

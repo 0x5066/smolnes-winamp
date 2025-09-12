@@ -54,13 +54,9 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             s_close = 1;
             break;
         }
-
-        default: {
-            res = DefWindowProc(hWnd, message, wParam, lParam);
-        }
     }
 
-    return res;
+    return DefWindowProc(hWnd, message, wParam, lParam);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -69,22 +65,20 @@ embedWindowState myWindowState;
 HWND hMainWnd = NULL;
 
 const char* title;
+static const char* g_title = NULL;
 
 int mfb_open(const char* title, int width, int height, int scale) {
     int styles;
     HWND parent = NULL;
     HWND (*e)(embedWindowState *v);
 
-    title = title;
+    g_title = title;
 
     myWindowState.flags = EMBED_FLAGS_NOWINDOWMENU | EMBED_FLAGS_SCALEABLE_WND;
-    myWindowState.r.left = 0;
-    myWindowState.r.top = 0;
-    myWindowState.r.right = width * scale;
-    myWindowState.r.bottom = height * scale;
-
-    myWindowState.r.right -= myWindowState.r.left;
-    myWindowState.r.bottom -= myWindowState.r.top;
+    myWindowState.r.left   = 0;
+    myWindowState.r.top    = 0;
+    myWindowState.r.right  = ((width+7) * scale) - 2;
+    myWindowState.r.bottom = ((height+13) * scale) - 5;
 
     *(void**)&e = (void *)SendMessage(mod.hMainWindow,WM_WA_IPC,(LPARAM)0,IPC_GET_EMBEDIF);
 
@@ -105,11 +99,11 @@ int mfb_open(const char* title, int width, int height, int scale) {
 		wc.hInstance = mod.hDllInstance;	// hInstance of DLL
 		wc.lpszClassName = title;			// our window class name
 	
-		if (!RegisterClass(&wc)) 
-		{
-			MessageBox(mod.hMainWindow,"Error registering window class","blah",MB_OK);
-			return 1;
-		}
+        ATOM atom = RegisterClass(&wc);
+        if (!atom && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) {
+            MessageBox(mod.hMainWindow, "Error registering window class", "blah", MB_OK);
+            return 1;
+        }
 	}
 
     s_width = width;
@@ -124,7 +118,7 @@ int mfb_open(const char* title, int width, int height, int scale) {
             title,		    // our window class name
             NULL,				// no title, we're a child
             styles,	            // styles, we are a child	
-            0, 0, myWindowState.r.right - myWindowState.r.left, myWindowState.r.bottom - myWindowState.r.top, // Position and size
+            CW_USEDEFAULT, CW_USEDEFAULT, myWindowState.r.right - myWindowState.r.left, myWindowState.r.bottom - myWindowState.r.top, // Position and size
             parent,             // Parent window
             NULL,               // Menu
             mod.hDllInstance, // Instance handle
@@ -156,7 +150,7 @@ int mfb_open(const char* title, int width, int height, int scale) {
     ((DWORD *)s_bitmapInfo->bmiColors)[0] = 0x001F;
     s_hdc = GetDC(s_wnd);
 
-    return 1;
+    return 0;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -170,7 +164,10 @@ int mfb_update(void* buffer, int fps_limit) {
     InvalidateRect(s_wnd, NULL, TRUE);
     SendMessage(s_wnd, WM_PAINT, 0, 0);
 
-    while (PeekMessage(&msg, s_wnd, 0, 0, PM_REMOVE)) {
+    // set to NULL instead of s_wnd to prevent the window being unmovable
+    // and it not updating its top window border, the other sides are just black
+    // does not fix gen_ff being a genuine piece of shit (close to 5% CPU usage, runtime error)
+    while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }

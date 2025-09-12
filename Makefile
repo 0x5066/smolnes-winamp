@@ -21,11 +21,12 @@ all: in_nes.dll
 
 in_nes.dll: src/plugin.c $(OBJS)
 	i686-w64-mingw32-c++ -g3 -Os $(CFLAGS) -o $@ $^ $(LDFLAGS) -static
+	cp in_nes.dll "/home/erisl/.wine/drive_c/Program Files (x86)/Winamp5666/Plugins/in_nes.dll"
 
 smbstuff.o: src/smbstuff.cpp
 	i686-w64-mingw32-c++ -g3 -Os $(CFLAGS) -c -o $@ $< -static
 
-minifb.o: src/WinMiniFB.c
+minifb.o: src/WinMiniFB_embedwindow.c
 	i686-w64-mingw32-c++ -g3 -Os $(CFLAGS) -c -o $@ $< -static
 
 nes_apu.o: nes_nsfplay/nes_apu.cpp
