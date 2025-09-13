@@ -675,7 +675,7 @@ void wa_main(int argc, char **argv) {
   PCL = mem(~3, ~0, 0, 0);
   PC_HI = mem(~2, ~0, 0, 0);
 
-  if (!mfb_open("smolnes", 256, 224, 3)) {}
+  if (!mfb_open("smolnes", 256, 224, 2)) {}
     //return 0;
   // Create window 1024x840. The framebuffer is 256x240, but we don't draw the
   // top or bottom 8 rows. Scaling up by 4x gives 1024x960, but that looks
@@ -1183,21 +1183,13 @@ void setpan(int pan)
 
 void getfileinfo(const char* filename, char* title, int* length_in_ms)
 {
-  //char str[40];
-  //sprintf(str, "length_in_ms (%d)\n", length_in_ms);
-  //OutputDebugString(str);
-  //char str2[40];
-  //sprintf(str2, "title (%d)\n", title);
-  //OutputDebugString(str2);
-
-  // change at some point
-  strcpy(title, "smolnes");
+  strcpy(title, filename);
+  if (length_in_ms) // always check for NULL
+    *length_in_ms = smbltmr[0] * 100 + smbltmr[1] * 10 + smbltmr[2];
 }
 
 void eq_set(int on, char data[10], int preamp)
-{
-  // what am i meant to be doing here?
-}
+{};
 
 int infoBox(const char* file, HWND hwndParent) {
   // what would i even need this for?

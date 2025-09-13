@@ -24,6 +24,9 @@ int mfb_update(void* buffer, int fps_limit);
 // Close the window
 void mfb_close();
 char * mfb_keystatus();
+static void mfb_getIniFile(wchar_t* ini_file);
+void mfb_configRead();
+void mfb_configWrite();
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #ifdef __cplusplus

@@ -19,6 +19,9 @@ static void* s_buffer;
 static BITMAPINFO* s_bitmapInfo;
 static char key_status[512] = {};
 
+static int win_x = 0;
+static int win_y = 0;
+
 extern In_Module mod;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -58,22 +61,28 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
 embedWindowState myWindowState;
 HWND hMainWnd = NULL;
+HWND parent = NULL;
 
 const char* title;
 static const char* g_title = NULL;
 
 int mfb_open(const char* title, int width, int height, int scale) {
+
+    mfb_configRead();
     int styles;
-    HWND parent = NULL;
     HWND (*e)(embedWindowState *v);
 
     g_title = title;
 
-    myWindowState.flags = EMBED_FLAGS_NOWINDOWMENU | EMBED_FLAGS_SCALEABLE_WND;
-    myWindowState.r.left   = 0;
-    myWindowState.r.top    = 0;
-    myWindowState.r.right  = ((width+7) * scale) - 2;
-    myWindowState.r.bottom = ((height+13) * scale) - 5;
+    myWindowState.flags = EMBED_FLAGS_NORESIZE | EMBED_FLAGS_NOWINDOWMENU | EMBED_FLAGS_SCALEABLE_WND;
+
+    // left/top are the position (relative to the embed parent)
+    myWindowState.r.left   = win_x;
+    myWindowState.r.top    = win_y;
+
+    // make right/bottom be coordinates (not raw widths) so right-left == desired width
+    myWindowState.r.right  = myWindowState.r.left + ((width) * scale) + 19;   // -> right = left + width
+    myWindowState.r.bottom = myWindowState.r.top  + ((height) * scale) + 34;  // -> bottom = top + height
 
     *(void**)&e = (void *)SendMessage(mod.hMainWindow,WM_WA_IPC,(LPARAM)0,IPC_GET_EMBEDIF);
 
@@ -93,7 +102,6 @@ int mfb_open(const char* title, int width, int height, int scale) {
 		wc.lpfnWndProc = WndProc;				// our window procedure
 		wc.hInstance = mod.hDllInstance;	// hInstance of DLL
 		wc.lpszClassName = title;			// our window class name
-	
         ATOM atom = RegisterClass(&wc);
         if (!atom && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) {
             MessageBox(mod.hMainWindow, "Error registering window class", "blah", MB_OK);
@@ -106,19 +114,25 @@ int mfb_open(const char* title, int width, int height, int scale) {
     s_scale = scale;
 
     styles = WS_VISIBLE|WS_CHILDWINDOW|WS_OVERLAPPED|WS_CLIPCHILDREN|WS_CLIPSIBLINGS;
-        // Create the window
-        s_wnd = CreateWindowEx(
-            0,	// these exstyles put a nice small frame, 
-            // but also a button in the taskbar
-            title,		    // our window class name
-            NULL,				// no title, we're a child
-            styles,	            // styles, we are a child	
-            CW_USEDEFAULT, CW_USEDEFAULT, myWindowState.r.right - myWindowState.r.left, myWindowState.r.bottom - myWindowState.r.top, // Position and size
-            parent,             // Parent window
-            NULL,               // Menu
-            mod.hDllInstance, // Instance handle
-            0 // Additional application data
-        );
+    // compute width/height from RECT (important)
+    int win_w = myWindowState.r.right  - myWindowState.r.left;
+    int win_h = myWindowState.r.bottom - myWindowState.r.top;
+
+    s_wnd = CreateWindowEx(
+        0,
+        title,
+        NULL,
+        styles,
+        myWindowState.r.left,   // x (relative to parent)
+        myWindowState.r.top,    // y
+        win_w,                  // width = right - left
+        win_h,                  // height = bottom - top
+        parent,
+        NULL,
+        mod.hDllInstance,
+        0
+    );
+
 #ifdef _WIN64
     // Store pointer safely on 64-bit
     SetWindowLongPtr(s_wnd, GWLP_USERDATA, (LONG_PTR)&mod);
@@ -184,10 +198,11 @@ int mfb_update(void* buffer, int fps_limit) {
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void mfb_close() {
+    mfb_configWrite();
     s_buffer = 0;
     free(s_bitmapInfo);
     ReleaseDC(s_wnd, s_hdc);
-    if (myWindowState.me) 
+    if (myWindowState.me)
     {
         SetForegroundWindow(mod.hMainWindow);
         DestroyWindow(myWindowState.me);
@@ -197,4 +212,51 @@ void mfb_close() {
 
 char * mfb_keystatus() {
     return key_status;
+}
+
+static void mfb_getIniFile(wchar_t* ini_file) {
+    // Get the Winamp plugin directory
+    wchar_t *plugdir=(wchar_t*)SendMessage(mod.hMainWindow,WM_WA_IPC,0,IPC_GETINIDIRECTORYW);
+
+    // Check if plugdir is valid
+    if (plugdir == nullptr) {
+        // Error handling: Unable to retrieve plugin directory
+        return;
+    }
+
+    // Concatenate the plugin directory with the desired INI file name
+    wcscpy(ini_file, plugdir);
+    wcscat(ini_file, L"\\Plugins\\in_nes.ini");
+}
+
+void mfb_configRead() {
+    wchar_t ini_file[MAX_PATH];
+    mfb_getIniFile(ini_file);
+
+    win_x = GetPrivateProfileIntW(L"smolnes", L"Screen_x", win_x, ini_file);
+    win_y = GetPrivateProfileIntW(L"smolnes", L"Screen_y", win_y, ini_file);
+}
+
+void mfb_configWrite() {
+    if (!parent) return;
+
+    RECT r;
+    GetWindowRect(parent, &r);
+
+    // convert absolute screen coords → relative to parent’s client area
+    HWND parentParent = GetParent(parent);
+
+    POINT pt = { r.left, r.top };
+    ScreenToClient(parentParent, &pt);
+    win_x = pt.x;
+    win_y = pt.y;
+
+    wchar_t string[32];
+    wchar_t ini_file[MAX_PATH];
+    mfb_getIniFile(ini_file);
+
+    wsprintfW(string, L"%d", win_x);
+    WritePrivateProfileStringW(L"smolnes", L"Screen_x", string, ini_file);
+    wsprintfW(string, L"%d", win_y);
+    WritePrivateProfileStringW(L"smolnes", L"Screen_y", string, ini_file);
 }
