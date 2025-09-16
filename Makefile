@@ -21,7 +21,7 @@ all: in_nes.dll
 
 in_nes.dll: src/plugin.c $(OBJS)
 	i686-w64-mingw32-c++ -g3 -Os $(CFLAGS) -o $@ $^ $(LDFLAGS) -static
-	cp in_nes.dll "/home/dinnerbird/.wine/drive_c/Program Files (x86)/WACUP/Plugins/in_nes.dll"
+	cp in_nes.dll "/home/$(USER)/.wine/drive_c/Program Files (x86)/WACUP/Plugins/in_nes.dll"
 
 smbstuff.o: src/smbstuff.cpp
 	i686-w64-mingw32-c++ -g3 -Og $(CFLAGS) -c -o $@ $< -static
