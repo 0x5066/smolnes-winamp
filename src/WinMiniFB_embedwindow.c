@@ -209,3 +209,50 @@ void mfb_close() {
 char * mfb_keystatus() {
     return key_status;
 }
+
+static void mfb_getIniFile(wchar_t* ini_file) {
+    // Get the Winamp plugin directory
+    wchar_t *plugdir=(wchar_t*)SendMessage(mod.hMainWindow,WM_WA_IPC,0,IPC_GETINIDIRECTORYW);
+
+    // Check if plugdir is valid
+    if (plugdir == NULL) { // <-- Should this be "NULL" and not "nullptr"?
+        // Error handling: Unable to retrieve plugin directory
+        return;
+    }
+
+    // Concatenate the plugin directory with the desired INI file name
+    wcscpy(ini_file, plugdir);
+    wcscat(ini_file, L"\\Plugins\\in_nes.ini");
+}
+
+void mfb_configRead() {
+    wchar_t ini_file[MAX_PATH];
+    mfb_getIniFile(ini_file);
+
+    win_x = GetPrivateProfileIntW(L"smolnes", L"Screen_x", win_x, ini_file);
+    win_y = GetPrivateProfileIntW(L"smolnes", L"Screen_y", win_y, ini_file);
+}
+
+void mfb_configWrite() {
+    if (!parent) return;
+
+    RECT r;
+    GetWindowRect(parent, &r);
+
+    // convert absolute screen coords → relative to parent’s client area
+    HWND parentParent = GetParent(parent);
+
+    POINT pt = { r.left, r.top };
+    ScreenToClient(parentParent, &pt);
+    win_x = pt.x;
+    win_y = pt.y;
+
+    wchar_t string[32];
+    wchar_t ini_file[MAX_PATH];
+    mfb_getIniFile(ini_file);
+
+    wsprintfW(string, L"%d", win_x);
+    WritePrivateProfileStringW(L"smolnes", L"Screen_x", string, ini_file);
+    wsprintfW(string, L"%d", win_y);
+    WritePrivateProfileStringW(L"smolnes", L"Screen_y", string, ini_file);
+}

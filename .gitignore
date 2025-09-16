@@ -6,4 +6,5 @@ deobfuscated
 *.dll
 bin/
 build/
-.vscode/settings.json
+*.code-workspace
+*.vscode
